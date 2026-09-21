@@ -1,0 +1,879 @@
+-- DYKREIN HOSPOT V5.3 - COPIA TODO ESTE ARCHIVO.
+-- Interfaz compacta + AUTOSALTO ON/OFF. Necesita las funciones de tu ejecutor.
+-- El codigo de abajo se guarda localmente para reanudar tras un salto compatible.
+local source = [====[
+-- DYKREIN HOSPOT V5.3 COMPACTO + AUTOSALTO | Script completo, con el logo original incluido.
+-- Interfaz al 80% del tamano anterior. +/- guarda el zoom en el mismo archivo V5.
+-- Solo ping actual y jugadores. Logo redondeado desde la interfaz.
+-- ADMINABUSE es un salto independiente: consulta nueva, 0-1 jugadores y eleccion
+-- aleatoria. Reduce coincidencias posibles; no detecta scripts ni bloquea entradas.
+-- AUTOSALTO ON vigila jugadores y, si eliges <=150 ms, el ping real.
+-- Requiere 5 segundos de incumplimiento sostenido; espera 8 segundos tras cargar.
+-- Usa el ultimo modo pulsado. Se queda si el servidor cumple; reintenta cada 15 s.
+-- OFF cancela busquedas y reintentos, pero Roblox puede completar un salto enviado.
+-- Continuidad entre servidores: requiere queue_on_teleport y archivos locales.
+-- Sin esa funcion, vuelve a ejecutar este archivo al llegar para continuar.
+-- Copia TODO este archivo en el mismo entorno donde ejecutabas la version anterior.
+-- Requiere request/http_request para HTTP; readfile/writefile para persistencia;
+-- getcustomasset o getsynasset para mostrar el JPEG incorporado.
+-- No es un LocalScript estandar de Roblox Studio.
+-- Los filtros usan datos anunciados: jugadores y ping pueden cambiar antes de entrar.
+-- Hasta 150 servidores por busqueda; no significa 150 coincidencias garantizadas.
+-- KeyAuth: nombre/version heredados del codigo base; deben coincidir con tu panel.
+-- API 1.3 usa name + ownerid + version, sin application secret en este flujo.
+-- La verificacion cliente por HTTPS no equivale a un backend de licencias inviolable.
+
+local CONFIG = {
+    KeyAuthName = "DykreinHospot",
+    KeyAuthOwnerID = "eSXRCZ2Sto",
+    KeyAuthVersion = "1.0",
+    KeyAuthURL = "https://keyauth.win/api/1.3/",
+    BaseUIScale = 0.8, -- Reduccion visual del 20%; no reinicia el zoom guardado.
+    MaxServers = 150,
+    CacheTTL = 120,
+    VisitedTTL = 900,
+    ClearCooldown = 3,
+    SearchCooldown = 5,
+    MaxTeleportAttempts = 5,
+    AdminMaxAttempts = 3,
+    AdminFreshSeconds = 8, -- Edad desde la recepcion LOCAL, no frescura garantizada de Roblox.
+    RequestTimeout = 20,
+    AutoRetrySeconds = 15,
+    AutoSettleSeconds = 8,
+    AutoBadSeconds = 5,
+}
+local LOGO_BASE64 = [==[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CR8GzMzRpHidqAADqVYRUEAABQgwAAAAAAAAA/rZjy9pkAAAABvAGJAV4vgAAAAAAAAAB7z2o1x6MAcYgRjZWwyj/wC/AAAAAAAAAAWiRcAAqCQiCAGFtgAAAMJAAAAAAAAAAAKHda/Alc9zwtcPMAAAESgAAAAAAAAAAAv98qo3O99tccQAAAAAwDAAAAAAAAAAAA5DYU4AAAAAAAAAAAA1ZAAAAAAAAAAAAAC44wAAAPAAAAAAAEEgAAAAAAAAAAAAAAG9IAQAAgAAAAExqLgAAAAAAAAAAAAAAA4N0IQh5/7+KlaYhAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/8QAAv/aAAwDAQACAAMAAAAQ88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888849H1sAau2l/HaW888888888888888888xqaqw088888FhRKlS888888888888888sAaXq8McM+csMM8Wr/wDPPPPPPPPPPPPPPK40XPPPPPPPPPPPD7HvPPPPPPPPPPPPZJo/OOTAACSfvPPPPM7/ADzzzzzzzzzzy436/wAVUDcvImrH0888sT0888888888885bm08BZe8888wOOC888F1V9w88888888v3c888dk88892pulL888lyoiU8888888uHLI88d388888s0Tq888LbBkfM888888+yBg8TqB888888IZJ88j5/8888888888q48884djH78888lXc88Dalcec8888888upS7YGzYUc8888rH088DnbYcYw880cCG8zsK0cPo288krgneQ888pCed8w88+Nv/SkQeIEPUU88Mszoea8885Pw8888888884yVX5jDZ888886yX/GxCEV88888888880WdgvCJy8+118BKac8YtIu88888888885z5k88U28/98MBVc888dd88888888888y2vkI833/8/gXNS88885d88888888888YHgmTudeyiDRu88888c2888888888888sjL2E888888888888Mm8888888888888e+EM8881888888840888888888888888ta08M88c88884EHdc888888888888888xcM5EdtzjRoiOXf888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888/8QAQhEAAgEDAAQKBgcGBwEAAAAAAQIDAAQRBRIhMQYTICIwMkFRUmEQFHFygZEVIzM0QJKTJEJTYqGxNUNEVHBzgoP/2gAIAQIBAT8A/wCCItTX5+6gLXvFYtO8V+y94rFr3is2vlX7L5f1oeq+X9azaeVZtO5a1LY7sUYITuNG0GMq9PBKm0rs/Bpah4GkWVSRvTbrVFZ3EoJSMnFPG6HDKQfPogzDcaS4dd4zWYZd/NNSQunmO/8AAwTyQSa6b6knnmcsoI8hTRXB2sj/ABBpo3XrIR7R0aMqnaoIqNo3TA3VPb6uWQc3pra2kuZRHHjWxnbU2iLqGMu7R4HnVpaPczKg7e2pobixnwTqsNxBpOEIW1UFNaUeWyrq+nun1pG+HZ0isynINRSrIvn21cQ6hyOqel0H9/HuGtNqxsjgZ2irOO+43NuHDeWyrxrhpiZ+v6YLC5nQsi7N1fRF74B86GiL3wj519EXvhHzo6KvQM8Xn409ncx9aJh8KII5UT6jg9lMqSJg7jTKVYg9JoH7+Pcar1XeymWMZfH9KttLXVsGjbnDz3incuxJ7fRE4SRWxnFR6TcoNVFA8ql01cI5UIlfTlz4Eoadn7YlNR6ej3SREezbUF9a3A5kgJ7jsNT2FrOOdGM94q90TLAC8fOQfMcq2kDDVJ3VdISdYDYOk0D9+/8Ama0leS2lvxkerrZA21PMJiZCMOSc43ci0Yshz2Vc/atyASDkb6sNMSRkJOdZO/tFIySoGU5U1caDjmkLI+pnsxV5ZSWr6rbR38hHKHIozORglaIHeOj0D9+P/Wa079y/9Dk2nVb3quDmU8rQ97xL8U7c1t3kaG+tLWomtiwG0UQQSO7k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]==]
+
+if not game:IsLoaded() then game.Loaded:Wait() end
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
+if not Player then error("Dykrein Hospot debe ejecutarse desde el cliente.") end
+local Http = game:GetService("HttpService")
+local Teleport = game:GetService("TeleportService")
+local Input = game:GetService("UserInputService")
+local Stats = game:GetService("Stats")
+local Env = (getgenv and getgenv()) or _G
+local Request = (syn and syn.request) or http_request or request or (http and http.request)
+local Asset = getcustomasset or getsynasset
+local QueueTeleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+local AdminRandom = Random.new() -- Generador independiente, sin reseed global por os.time().
+local UI_NAME = "Dykrein_Hospot_Hub"
+local FILES = {
+    settings = "Dykrein_Hospot_Settings_V5.json",
+    runtime = "Dykrein_Hospot_Runtime_V5.lua",
+    cache = "CacheHospot_Pro_V5_" .. tostring(game.PlaceId) .. ".json",
+    visited = "Dykrein_Hospot_Visited_" .. tostring(game.PlaceId) .. ".json",
+    key = "Hospot_KeyAuth.txt",
+    logo = "Dykrein_Hospot_Logo_V5.jpg",
+}
+-- Detener conexiones, tareas y escrituras de la ejecucion anterior.
+if type(Env.DykreinHospotV5) == "table" and type(Env.DykreinHospotV5.stop) == "function" then
+    pcall(Env.DykreinHospotV5.stop)
+end
+local S = {alive=true, busy=false, adminMode=false, auth=false, authBusy=false, expiry=nil,
+    run=0, connections={}, tasks={}, cache={}, visited={}, cachedAt=0,
+    clearUntil=0, searchUntil=0, apiUntil=0, attempt=nil, storageOK=true,
+    storageError=false, session=nil, requestPending=false, resumeQueued=false,
+    nextAutoAt=0, autoBadSince=nil, autoHasStatus=false, lastPing=nil, lastPingAt=0}
+Env.DykreinHospotV5 = S
+local U = {}
+
+-- BEGIN CORE: funciones puras verificables sin Roblox.
+local Core = {}
+function Core.number(x)
+    return type(x) == "number" and x == x and x > -math.huge and x < math.huge
+end
+function Core.normalize(raw)
+    if type(raw) ~= "table" or type(raw.id) ~= "string" or raw.id == "" then return nil end
+    if not Core.number(raw.playing) or not Core.number(raw.maxPlayers) then return nil end
+    if raw.playing < 0 or raw.playing % 1 ~= 0 or raw.maxPlayers <= 0 or raw.maxPlayers % 1 ~= 0 then return nil end
+    local ping = Core.number(raw.ping) and raw.ping > 0 and raw.ping or nil
+    return {id=raw.id, playing=raw.playing, maxPlayers=raw.maxPlayers, ping=ping}
+end
+function Core.accepts(server, prefs, currentId, visited, now, ttl)
+    if server.id == currentId or server.playing >= server.maxPlayers then return false end
+    local seen = visited[server.id]
+    if Core.number(seen) and now - seen < ttl then return false end
+    if prefs.players == "quiet" and server.playing > 1 then return false end
+    if prefs.ping == "under150" and (not server.ping or server.ping > 150) then return false end
+    return true
+end
+function Core.candidates(servers, prefs, currentId, visited, now, ttl)
+    local out, seen = {}, {}
+    for _, raw in ipairs(servers) do
+        local server = Core.normalize(raw)
+        if server and not seen[server.id] and Core.accepts(server,prefs,currentId,visited,now,ttl) then
+            seen[server.id] = true
+            out[#out+1] = server
+        end
+    end
+    table.sort(out, function(a,b)
+        if a.playing ~= b.playing then return a.playing < b.playing end
+        if prefs.ping ~= "any" and (a.ping or math.huge) ~= (b.ping or math.huge) then
+            return (a.ping or math.huge) < (b.ping or math.huge)
+        end
+        return a.id < b.id
+    end)
+    return out
+end
+function Core.adminCandidates(servers, pingMode, currentId, visited, now, ttl, clock, freshSeconds)
+    local out,seen={},{}
+    local filter={players="quiet",ping=pingMode}
+    for _,raw in ipairs(servers) do
+        local server=Core.normalize(raw)
+        local received=type(raw)=="table" and raw.observedAt
+        if server and not seen[server.id] and Core.number(received)
+            and clock>=received and clock-received<=freshSeconds
+            and Core.accepts(server,filter,currentId,visited,now,ttl) then
+            seen[server.id]=true; out[#out+1]=server
+        end
+    end
+    return out
+end
+function Core.pickAdmin(pool,pingMode,roll)
+    if #pool==0 then return nil end
+    -- Probabilidad suave: ningun candidato valido queda descartado por su posicion.
+    -- "best" favorece moderadamente ping bajo sin elegir siempre el mismo servidor.
+    local weights,total={},0
+    for i,server in ipairs(pool) do
+        local weight=1
+        if pingMode=="best" then
+            weight=server.ping and math.max(0.5,math.min(2,150/server.ping)) or 0.5
+        end
+        weights[i]=weight; total=total+weight
+    end
+    local threshold=math.max(0,math.min(0.999999999,roll))*total
+    for i,server in ipairs(pool) do
+        threshold=threshold-weights[i]
+        if threshold<0 then return server end
+    end
+    return pool[#pool]
+end
+function Core.autoSatisfied(prefs,count,maxPlayers,ping)
+    local quiet=prefs.autoMode=="admin" or prefs.players=="quiet"
+    -- El usuario ya esta incluido: 2 personas equivale a 1 acompanante.
+    if quiet and count>2 then return false end
+    if not quiet and maxPlayers>0 and count>=maxPlayers then return false end
+    if prefs.ping=="under150" then
+        if not Core.number(ping) or ping<=0 then return nil end
+        if ping>150 then return false end
+    end
+    return true
+end
+function Core.duration(seconds)
+    seconds = math.max(0, math.floor(seconds))
+    local days = math.floor(seconds / 86400)
+    local text = string.format("%02d:%02d:%02d",math.floor(seconds/3600)%24,math.floor(seconds/60)%60,seconds%60)
+    return days > 0 and (days .. "d " .. text) or text
+end
+function Core.decode64(data)
+    local chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    local lookup, out, acc, bits = {}, {}, 0, 0
+    for i=1,#chars do lookup[chars:sub(i,i)] = i-1 end
+    for i=1,#data do
+        local value = lookup[data:sub(i,i)]
+        if value then
+            acc = acc * 64 + value; bits = bits + 6
+            if bits >= 8 then
+                bits = bits - 8
+                out[#out+1] = string.char(math.floor(acc / 2^bits) % 256)
+                acc = acc % 2^bits
+            end
+        end
+    end
+    return table.concat(out)
+end
+-- END CORE
+
+local function spawn(fn)
+    local thread = task.defer(function()
+        if S.alive then fn() end
+    end)
+    S.tasks[#S.tasks+1] = thread
+    return thread
+end
+local function connect(signal, fn)
+    local c = signal:Connect(function(...) if S.alive then fn(...) end end)
+    S.connections[#S.connections+1] = c
+    return c
+end
+local function readText(path)
+    if type(readfile) ~= "function" then return nil end
+    local ok, data = pcall(readfile, path)
+    return ok and type(data) == "string" and data or nil
+end
+local function readJSON(path)
+    local data = readText(path)
+    if not data then return nil end
+    local ok, result = pcall(function() return Http:JSONDecode(data) end)
+    return ok and type(result) == "table" and result or nil
+end
+local function writeText(path, text)
+    if type(writefile) ~= "function" then S.storageOK=false; return false end
+    local ok = pcall(writefile, path, text)
+    if not ok then S.storageOK=false; S.storageError=true end
+    return ok
+end
+local function writeJSON(path, data)
+    local ok, encoded = pcall(function() return Http:JSONEncode(data) end)
+    return ok and writeText(path, encoded)
+end
+local prefs = {x=0.12,y=0.18,scale=1,minimized=false,players="quiet",ping="best",autoHop=false,autoMode="normal"}
+do
+    local saved = readJSON(FILES.settings)
+    if saved then
+        for _, k in ipairs({"x","y","scale"}) do
+            if Core.number(saved[k]) then prefs[k]=saved[k] end
+        end
+        prefs.x=math.clamp(prefs.x,0,1); prefs.y=math.clamp(prefs.y,0,1)
+        prefs.scale=math.clamp(prefs.scale,0.55,1.5)
+        prefs.minimized=saved.minimized == true
+        prefs.autoHop=saved.autoHop == true
+        prefs.autoMode=saved.autoMode=="admin" and "admin" or "normal"
+        if saved.players == "any" then prefs.players="any" end
+        if saved.ping == "under150" or saved.ping == "any" or saved.ping == "best" then prefs.ping=saved.ping end
+    end
+    S.storageOK=type(readfile)=="function" and type(writefile)=="function"
+    local visited=readJSON(FILES.visited)
+    if visited then
+        for id, stamp in pairs(visited) do
+            if type(id)=="string" and Core.number(stamp) and stamp<=os.time() and os.time()-stamp<CONFIG.VisitedTTL then
+                S.visited[id]=stamp
+            end
+        end
+    end
+    S.visited[game.JobId]=os.time()
+    local cache=readJSON(FILES.cache)
+    if cache and cache.version==5 and tostring(cache.placeId)==tostring(game.PlaceId)
+        and Core.number(cache.savedAt) and os.time()>=cache.savedAt
+        and os.time()-cache.savedAt<CONFIG.CacheTTL and type(cache.servers)=="table" then
+        S.cachedAt=cache.savedAt
+        local seen={}
+        for _, raw in ipairs(cache.servers) do
+            local server=Core.normalize(raw)
+            if server and not seen[server.id] and #S.cache<CONFIG.MaxServers then
+                S.cache[#S.cache+1]=server; seen[server.id]=true
+            end
+        end
+    end
+end
+local function saveSettings() return writeJSON(FILES.settings,prefs) end
+local function saveCache()
+    writeJSON(FILES.cache,{version=5,placeId=tostring(game.PlaceId),savedAt=S.cachedAt,servers=S.cache})
+end
+local function saveVisited()
+    for id, stamp in pairs(S.visited) do
+        if os.time()-stamp>=CONFIG.VisitedTTL then S.visited[id]=nil end
+    end
+    writeJSON(FILES.visited,S.visited)
+end
+local function stop()
+    if not S.alive then return end
+    saveSettings()
+    S.alive=false; S.run=S.run+1
+    for _, c in ipairs(S.connections) do pcall(function() c:Disconnect() end) end
+    for _, thread in ipairs(S.tasks) do
+        if thread~=coroutine.running() then pcall(task.cancel,thread) end
+    end
+    if U.gui then pcall(function() U.gui:Destroy() end) end
+    if Env.DykreinHospotV5==S then Env.DykreinHospotV5=nil end
+end
+S.stop=stop
+
+-- Apariencia: fondo carbon, botones con contraste y acentos del logo.
+local C = {bg=Color3.fromRGB(14,16,23),panel=Color3.fromRGB(23,27,38),
+    button=Color3.fromRGB(39,47,66),stroke=Color3.fromRGB(62,75,99),
+    text=Color3.fromRGB(242,245,255),muted=Color3.fromRGB(161,176,199),
+    cyan=Color3.fromRGB(59,210,249),pink=Color3.fromRGB(249,69,170),
+    green=Color3.fromRGB(89,226,162),amber=Color3.fromRGB(255,195,93),
+    red=Color3.fromRGB(255,108,130),purple=Color3.fromRGB(103,77,220)}
+local function make(class, parent, props)
+    local obj=Instance.new(class)
+    for k,v in pairs(props or {}) do obj[k]=v end
+    obj.Parent=parent
+    return obj
+end
+local function corner(obj,r) make("UICorner",obj,{CornerRadius=UDim.new(0,r or 9)}) end
+local function stroke(obj,color) return make("UIStroke",obj,{Color=color or C.stroke,Thickness=1,ApplyStrokeMode=Enum.ApplyStrokeMode.Border}) end
+local function label(parent,text,x,y,w,h,size,color)
+    return make("TextLabel",parent,{BackgroundTransparency=1,Text=text,Position=UDim2.fromOffset(x,y),
+        Size=UDim2.fromOffset(w,h),TextColor3=color or C.text,TextSize=size or 12,
+        Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left})
+end
+local function button(parent,text,x,y,w,h,color)
+    local b=make("TextButton",parent,{Text=text,Position=UDim2.fromOffset(x,y),Size=UDim2.fromOffset(w,h),
+        BackgroundColor3=color or C.button,BorderSizePixel=0,TextColor3=C.text,TextSize=12,
+        Font=Enum.Font.GothamBold,AutoButtonColor=true})
+    corner(b,8); stroke(b)
+    return b
+end
+local function logo(parent,x,y,size)
+    local f=make("Frame",parent,{Position=UDim2.fromOffset(x,y),Size=UDim2.fromOffset(size,size),BackgroundTransparency=1,BorderSizePixel=0,ClipsDescendants=true})
+    corner(f,14)
+    local fallback=label(f,"D",0,0,size,size,size*0.7,C.cyan)
+    fallback.Font=Enum.Font.GothamBlack; fallback.TextXAlignment=Enum.TextXAlignment.Center
+    local im=make("ImageLabel",f,{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ScaleType=Enum.ScaleType.Fit,ImageTransparency=0.08,Image=""})
+    -- Redondear el ImageLabel: el UICorner del padre no recorta su imagen.
+    corner(im,14)
+    return {image=im,fallback=fallback}
+end
+local parent=Player:WaitForChild("PlayerGui")
+if type(gethui)=="function" then
+    local ok,p=pcall(gethui); if ok and p then parent=p end
+end
+pcall(function()
+    for _, p in ipairs({parent,game:GetService("CoreGui"),Player.PlayerGui}) do
+        local old=p:FindFirstChild(UI_NAME); if old then old:Destroy() end
+    end
+end)
+U.gui=make("ScreenGui",parent,{Name=UI_NAME,ResetOnSpawn=false,DisplayOrder=99999,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
+U.main=make("Frame",U.gui,{BackgroundColor3=C.bg,BorderSizePixel=0,Size=UDim2.fromOffset(372,488),Active=true,ClipsDescendants=true})
+corner(U.main,14); stroke(U.main,C.stroke)
+U.scale=make("UIScale",U.main,{Scale=prefs.scale*CONFIG.BaseUIScale})
+local accent=make("Frame",U.main,{BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0,Size=UDim2.new(1,0,0,3)})
+make("UIGradient",accent,{Color=ColorSequence.new(C.cyan,C.pink)})
+U.header=make("Frame",U.main,{Size=UDim2.new(1,0,0,72),BackgroundTransparency=1,Active=true})
+U.logo=logo(U.header,14,13,46)
+label(U.header,"DYKREIN",72,15,170,22,17).Font=Enum.Font.GothamBold
+label(U.header,"HOSPOT / SERVER HOPPER",72,39,170,17,9,C.muted)
+U.minus=button(U.header,"-",248,19,34,34)
+U.plus=button(U.header,"+",286,19,34,34)
+U.min=button(U.header,"v",324,19,34,34)
+U.body=make("Frame",U.main,{Position=UDim2.fromOffset(0,72),Size=UDim2.fromOffset(372,416),BackgroundTransparency=1,Visible=false})
+local info=make("Frame",U.body,{Position=UDim2.fromOffset(14,0),Size=UDim2.fromOffset(344,64),BackgroundColor3=C.panel,BorderSizePixel=0})
+corner(info)
+label(info,"PING ACTUAL",12,8,160,16,10,C.muted)
+label(info,"JUGADORES",190,8,142,16,10,C.muted)
+U.ping=label(info,"Midiendo...",12,30,160,23,17,C.cyan)
+U.population=label(info,"--",190,30,142,23,17,C.text)
+label(U.body,"TOCA PARA CAMBIAR LOS FILTROS",16,71,340,15,9,C.muted)
+U.players=button(U.body,"",14,92,344,32)
+U.pingMode=button(U.body,"",14,132,344,32)
+U.hint=label(U.body,"",17,170,338,17,9,C.muted)
+U.search=button(U.body,"SALTAR NORMAL",14,194,168,40,C.purple)
+U.admin=button(U.body,"ADMINABUSE",190,194,168,40,Color3.fromRGB(20,95,112))
+U.auto=button(U.body,"AUTOSALTO: OFF",14,242,168,34)
+U.clear=button(U.body,"RENOVAR LISTA",190,242,168,34,Color3.fromRGB(103,41,64))
+U.cache=label(U.body,"",16,284,340,16,10,C.cyan)
+U.status=label(U.body,"Elige SALTAR NORMAL o ADMINABUSE.",16,307,340,32,11,C.text); U.status.TextWrapped=true
+U.license=label(U.body,"Licencia: pendiente",16,348,340,16,10,C.amber)
+U.storage=label(U.body,"",16,370,340,14,9,C.muted)
+label(U.body,"DYKREIN / V5.3",16,394,150,16,9,C.muted)
+local footer=label(U.body,"discord.gg/Dc34YYnmew",168,394,187,16,9,C.cyan)
+footer.TextXAlignment=Enum.TextXAlignment.Right
+U.login=make("Frame",U.main,{Position=UDim2.fromOffset(14,80),Size=UDim2.fromOffset(344,226),BackgroundTransparency=1})
+label(U.login,"ACCESO CON LICENCIA",0,0,344,25,16).Font=Enum.Font.GothamBold
+label(U.login,"Ingresa tu llave para abrir Dykrein Hospot.",0,33,344,22,12,C.muted)
+U.key=make("TextBox",U.login,{Position=UDim2.fromOffset(0,70),Size=UDim2.fromOffset(344,42),
+    BackgroundColor3=C.panel,BorderSizePixel=0,Text="",PlaceholderText="Pega tu llave de KeyAuth",
+    PlaceholderColor3=C.muted,TextColor3=C.text,TextSize=12,Font=Enum.Font.Gotham,ClearTextOnFocus=false})
+corner(U.key); stroke(U.key)
+U.verify=button(U.login,"VERIFICAR LLAVE",0,124,344,40,C.purple)
+U.loginStatus=label(U.login,"",0,177,344,44,11,C.muted); U.loginStatus.TextWrapped=true
+
+local function status(text,color)
+    if S.alive then U.status.Text=text; U.status.TextColor3=color or C.text end
+end
+local function viewport()
+    local camera=workspace.CurrentCamera
+    return camera and camera.ViewportSize or Vector2.new(1280,720)
+end
+local function layout()
+    local v=viewport()
+    local height = not S.auth and 326 or (prefs.minimized and 72 or 488)
+    -- Aplicar la reduccion tambien en pantallas pequenas, sin sobrescribir prefs.scale.
+    local scale=CONFIG.BaseUIScale*math.min(prefs.scale,(v.X-16)/372,(v.Y-16)/height)
+    scale=math.max(0.2,scale)
+    U.scale.Scale=scale; U.main.Size=UDim2.fromOffset(372,height)
+    local x=math.clamp(prefs.x*v.X,8,math.max(8,v.X-372*scale-8))
+    local y=math.clamp(prefs.y*v.Y,8,math.max(8,v.Y-height*scale-8))
+    U.main.Position=UDim2.fromOffset(x,y)
+    U.body.Visible=S.auth and not prefs.minimized
+    U.login.Visible=not S.auth
+    U.min.Text=prefs.minimized and "^" or "v"
+end
+local function candidates()
+    if os.time()-S.cachedAt>=CONFIG.CacheTTL then return {} end
+    return Core.candidates(S.cache,prefs,game.JobId,S.visited,os.time(),CONFIG.VisitedTTL)
+end
+local function refresh()
+    U.players.Text=prefs.players=="quiet" and "BUSCAR: 0-1 JUGADORES" or "BUSCAR: CUALQUIERA CON CUPO"
+    U.players.BackgroundColor3=prefs.players=="quiet" and Color3.fromRGB(24,83,71) or C.button
+    local titles={best="PING: PREFERIR EL MENOR",under150="PING: HASTA 150 ms",any="PING: CUALQUIERA"}
+    U.pingMode.Text=titles[prefs.ping]
+    U.hint.Text="Normal: tus filtros. Adminabuse: 0-1 al azar."
+    U.pingMode.BackgroundColor3=prefs.ping=="any" and C.button or Color3.fromRGB(35,64,99)
+    U.cache.Text=string.format("Lista normal: %d opciones / %d revisados",#candidates(),#S.cache)
+    U.storage.Text=S.storageOK and "Ajustes guardados automaticamente" or "Ajustes temporales: no hay acceso al guardado"
+    U.storage.TextColor3=S.storageOK and C.muted or C.amber
+    U.search.Text=(S.busy and not S.adminMode) and "CANCELAR SALTO" or "SALTAR NORMAL"
+    U.admin.Text=(S.busy and S.adminMode) and "CANCELAR ADMIN" or "ADMINABUSE"
+    U.search.BackgroundColor3=S.busy and Color3.fromRGB(69,60,99) or C.purple
+    U.admin.BackgroundColor3=S.busy and Color3.fromRGB(38,65,75) or Color3.fromRGB(20,95,112)
+    U.auto.Text=prefs.autoHop and "AUTOSALTO: ON" or "AUTOSALTO: OFF"
+    U.auto.BackgroundColor3=prefs.autoHop and Color3.fromRGB(24,105,75) or C.button
+    U.auto.TextColor3=prefs.autoHop and C.green or C.text
+end
+layout(); refresh()
+-- Logo original: decodificar bytes, escribir una sola vez y registrar asset local.
+spawn(function()
+    if type(Asset)~="function" or type(writefile)~="function" then
+        U.loginStatus.Text="Logo local no compatible: se muestra D. El resto del hub sigue disponible."
+        return
+    end
+    local ok,path=pcall(function()
+        local bytes=Core.decode64(LOGO_BASE64)
+        if readText(FILES.logo)~=bytes then writefile(FILES.logo,bytes) end
+        return Asset(FILES.logo)
+    end)
+    if S.alive and ok and type(path)=="string" and path~="" then
+        U.logo.image.Image=path
+        U.logo.fallback.Visible=false -- Evita que la D de respaldo se mezcle con el logo.
+    elseif S.alive then U.loginStatus.Text="No se pudo cargar el logo local; se muestra D." end
+end)
+
+-- Arrastre solo desde cabecera; raton y tactil. Guardar al soltar.
+local drag=nil
+connect(U.header.InputBegan,function(input)
+    if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+        local v=viewport()
+        drag={input=input,start=input.Position,x=U.main.Position.X.Offset,y=U.main.Position.Y.Offset,view=v}
+    end
+end)
+connect(Input.InputChanged,function(input)
+    if not drag then return end
+    if input==drag.input or input.UserInputType==Enum.UserInputType.MouseMovement then
+        local delta=input.Position-drag.start
+        prefs.x=(drag.x+delta.X)/drag.view.X; prefs.y=(drag.y+delta.Y)/drag.view.Y
+        layout()
+    end
+end)
+connect(Input.InputEnded,function(input)
+    if drag and (input==drag.input or input.UserInputType==Enum.UserInputType.MouseButton1) then
+        local v=viewport()
+        prefs.x=U.main.Position.X.Offset/v.X; prefs.y=U.main.Position.Y.Offset/v.Y
+        drag=nil; saveSettings(); refresh()
+    end
+end)
+connect(U.minus.Activated,function() prefs.scale=math.clamp(prefs.scale-0.1,0.55,1.5); layout(); saveSettings(); refresh() end)
+connect(U.plus.Activated,function() prefs.scale=math.clamp(prefs.scale+0.1,0.55,1.5); layout(); saveSettings(); refresh() end)
+connect(U.min.Activated,function() if S.auth then prefs.minimized=not prefs.minimized; layout(); saveSettings() end end)
+local function editable()
+    if S.busy then status("Pulsa CANCELAR SALTO o CANCELAR ADMIN para cambiar filtros.",C.amber); return false end
+    return true
+end
+connect(U.players.Activated,function()
+    if not editable() then return end
+    prefs.players=prefs.players=="quiet" and "any" or "quiet"; saveSettings(); refresh()
+    status("Filtro guardado. Se aplicara tambien a la cache.")
+end)
+connect(U.pingMode.Activated,function()
+    if not editable() then return end
+    prefs.ping=({best="under150",under150="any",any="best"})[prefs.ping]
+    saveSettings(); refresh(); status("Preferencia de ping guardada.")
+end)
+
+local function running(token)
+    return S.alive and S.auth and (not S.expiry or S.expiry>os.time()) and S.run==token
+end
+local function pause(seconds,token)
+    local finish=os.clock()+seconds
+    while S.alive and os.clock()<finish do
+        if token and not running(token) then return false end
+        task.wait(math.min(0.1,math.max(0,finish-os.clock())))
+    end
+    return S.alive and (not token or running(token))
+end
+-- Una solicitud a la vez; timeout logico sin solapar peticiones pendientes.
+local function requestJSON(options,token)
+    if type(Request)~="function" then return nil,"Tu entorno no ofrece request/http_request." end
+    if S.requestPending then return nil,"Todavia hay una peticion HTTP pendiente. Espera un momento." end
+    S.requestPending=true
+    local box={done=false}
+    spawn(function()
+        box.ok,box.response=pcall(Request,options)
+        box.done=true; S.requestPending=false
+    end)
+    local deadline=os.clock()+CONFIG.RequestTimeout
+    while S.alive and not box.done and os.clock()<deadline do
+        if token and not running(token) then return nil,"Cancelado" end
+        task.wait(0.1)
+    end
+    if not S.alive then return nil,"Cerrado" end
+    if not box.done then return nil,"Tiempo de espera HTTP agotado; espera antes de reintentar." end
+    if not box.ok or type(box.response)~="table" then return nil,"Fallo de conexion HTTP." end
+    local response=box.response
+    local code=tonumber(response.StatusCode or response.Status or response.status_code)
+    if not code then return nil,"El entorno no devolvio un estado HTTP valido." end
+    if code<200 or code>=300 then return nil,"HTTP "..code,code,response.Headers or {} end
+    local ok,data=pcall(function() return Http:JSONDecode(response.Body or response.body or "") end)
+    if not ok or type(data)~="table" then return nil,"La respuesta no contiene JSON valido.",code end
+    return data,nil,code,response.Headers or {}
+end
+local function form(fields)
+    local list={}
+    for k,v in pairs(fields) do list[#list+1]=Http:UrlEncode(k).."="..Http:UrlEncode(tostring(v)) end
+    table.sort(list)
+    return table.concat(list,"&")
+end
+local function authRequest(fields)
+    fields.name=CONFIG.KeyAuthName; fields.ownerid=CONFIG.KeyAuthOwnerID
+    return requestJSON({Url=CONFIG.KeyAuthURL,Method="POST",
+        Headers={["Content-Type"]="application/x-www-form-urlencoded"},Body=form(fields)})
+end
+local function verifyKey(key)
+    if not S.session then
+        local data,err=authRequest({type="init",ver=CONFIG.KeyAuthVersion})
+        if not data then return false,err end
+        if data.success~=true then return false,"KeyAuth: "..tostring(data.message or "Inicializacion rechazada") end
+        if type(data.sessionid)~="string" or data.sessionid=="" then return false,"KeyAuth no devolvio sesion." end
+        S.session=data.sessionid
+    end
+    local ok,hwid=pcall(function() return game:GetService("RbxAnalyticsService"):GetClientId() end)
+    if not ok or type(hwid)~="string" or hwid=="" then return false,"No se pudo obtener el ClientId de este dispositivo." end
+    local data,err=authRequest({type="license",key=key,hwid=hwid,sessionid=S.session})
+    if not data then return false,err end
+    if data.success~=true then
+        local msg=tostring(data.message or "Llave rechazada")
+        if msg:lower():find("session",1,true) then S.session=nil end
+        return false,"KeyAuth: "..msg
+    end
+    local expiry=nil
+    local subscriptions=type(data.info)=="table" and data.info.subscriptions
+    if type(subscriptions)=="table" then
+        for _,subscription in pairs(subscriptions) do
+            if type(subscription)=="table" then
+                local n=tonumber(subscription.expiry)
+                if Core.number(n) and n>0 then expiry=math.max(expiry or 0,n) end
+            end
+        end
+    end
+    if expiry and expiry<=os.time() then return false,"La licencia esta vencida." end
+    return true,"Llave validada.",expiry
+end
+local function login(key)
+    if S.authBusy or S.auth then return end
+    key=key:match("^%s*(.-)%s*$")
+    if key=="" then U.loginStatus.Text="Pega una llave antes de verificar."; return end
+    S.authBusy=true; U.verify.Text="CONECTANDO..."; U.loginStatus.Text="Verificando con KeyAuth..."
+    spawn(function()
+        local success,good,message,expiry=pcall(verifyKey,key)
+        if not S.alive then return end
+        S.authBusy=false; U.verify.Text="VERIFICAR LLAVE"
+        if not success then U.loginStatus.Text="Error interno verificando. Reintenta."; return end
+        U.loginStatus.Text=message or "No se pudo verificar."
+        if good then
+            S.auth=true; S.expiry=expiry
+            S.nextAutoAt=os.clock()+CONFIG.AutoSettleSeconds; S.autoBadSince=nil
+            writeText(FILES.key,key); U.key.Text=""
+            saveSettings(); saveVisited(); layout(); refresh()
+            status(prefs.autoHop and "Autosalto activo: comprobando este servidor..." or "Elige SALTAR NORMAL o ADMINABUSE.",C.green)
+        end
+    end)
+end
+connect(U.verify.Activated,function() login(U.key.Text) end)
+connect(U.key.FocusLost,function(enter) if enter then login(U.key.Text) end end)
+
+-- Busqueda paginada. La API se consulta con 100 y luego 50, nunca limit=150.
+local function fetchServers(token,isolated)
+    local cursor=nil
+    local cursorSeen,ids,out={},{},{}
+    local scanned=0
+    for page=1,8 do
+        if not running(token) then return nil,"Cancelado" end
+        local delay=math.max(0,S.apiUntil-os.clock())
+        if delay>0 then
+            status("Roblox limita las peticiones. Esperando "..math.ceil(delay).." s...",C.amber)
+            if not pause(delay,token) then return nil,"Cancelado" end
+        end
+        local limit=(CONFIG.MaxServers-scanned)>=100 and 100 or 50
+        local url="https://games.roblox.com/v1/games/"..tostring(game.PlaceId).."/servers/Public?sortOrder=Asc&excludeFullGames=true&limit="..limit
+        if cursor then url=url.."&cursor="..Http:UrlEncode(cursor) end
+        status(string.format("%s: %d/150 revisados. Pagina %d...",isolated and "ADMINABUSE" or "Buscando",scanned,page))
+        local data,err,code,headers
+        for retry=1,3 do
+            if not running(token) then return nil,"Cancelado" end
+            data,err,code,headers=requestJSON({Url=url,Method="GET"},token)
+            if data then break end
+            if code~=429 and not (code and code>=500) then break end
+            local waitFor=2^retry
+            if code==429 then
+                for key,value in pairs(headers or {}) do
+                    if tostring(key):lower()=="retry-after" then waitFor=math.max(waitFor,tonumber(value) or 0) end
+                end
+                waitFor=math.max(5,waitFor)
+            end
+            S.apiUntil=os.clock()+waitFor
+            if retry<3 then
+                status("HTTP "..code..": reintento en "..math.ceil(waitFor).." s.",C.amber)
+                if not pause(waitFor,token) then return nil,"Cancelado" end
+            end
+        end
+        if not data then return nil,err or "No se pudieron leer servidores." end
+        if type(data.data)~="table" then return nil,"Roblox no devolvio una lista de servidores." end
+        for _,raw in ipairs(data.data) do
+            if scanned>=CONFIG.MaxServers then break end
+            scanned=scanned+1
+            local server=Core.normalize(raw)
+            if server and not ids[server.id] then
+                if isolated then server.observedAt=os.clock() end
+                out[#out+1]=server; ids[server.id]=true
+            end
+        end
+        local nextCursor=data.nextPageCursor
+        if scanned>=CONFIG.MaxServers or #data.data==0 or type(nextCursor)~="string" or nextCursor=="" or cursorSeen[nextCursor] then break end
+        cursorSeen[nextCursor]=true; cursor=nextCursor
+        if not pause(1.2,token) then return nil,"Cancelado" end
+    end
+    if not running(token) then return nil,"Cancelado" end
+    if not isolated then S.cache=out; S.cachedAt=os.time(); saveCache(); refresh() end
+    return out,nil,scanned
+end
+local function finish(token,message,color)
+    if S.run~=token or not S.alive then return end
+    S.busy=false; S.adminMode=false; S.attempt=nil
+    S.nextAutoAt=os.clock()+CONFIG.AutoRetrySeconds; S.autoHasStatus=false
+    refresh(); status(message,color)
+end
+local canResume=type(QueueTeleport)=="function" and type(readfile)=="function"
+    and type(writefile)=="function" and type(loadstring)=="function" and readText(FILES.runtime)~=nil
+local function queueAutoResume()
+    if not prefs.autoHop or S.resumeQueued or not canResume then return end
+    local code=string.format([=[
+local env=(getgenv and getgenv()) or _G
+if not (env.DykreinHospotV5 and env.DykreinHospotV5.alive) then
+    pcall(function()
+        local prefs=game:GetService("HttpService"):JSONDecode(readfile(%q))
+        if prefs.autoHop==true then
+            local run=loadstring(readfile(%q))
+            if run then run() end
+        end
+    end)
+end
+]=],FILES.settings,FILES.runtime)
+    local ok=pcall(QueueTeleport,code)
+    if ok then S.resumeQueued=true else canResume=false end
+end
+local function runHop(token,adminMode)
+    local pool={}
+    local fetched=false
+    -- La ruta normal conserva ranking y cache de V5.1.
+    if not adminMode then
+        pool=candidates()
+        if #pool==0 then
+            local data,err=fetchServers(token)
+            fetched=true
+            if not data then finish(token,err,C.red); return end
+            pool=candidates()
+        end
+        if not running(token) then return end
+        if #pool==0 then
+            finish(token,"No hay coincidencias entre los servidores revisados. Prueba otro filtro o busca despues.",C.amber)
+            return
+        end
+    end
+    local maxAttempts=adminMode and CONFIG.AdminMaxAttempts or CONFIG.MaxTeleportAttempts
+    for attemptNumber=1,maxAttempts do
+        if not running(token) then return end
+        if adminMode then
+            -- Desincronizar antes de consultar, nunca envejecer la lista despues de elegir.
+            status("ADMINABUSE: consulta nueva, 0-1 jugadores y eleccion aleatoria.",C.cyan)
+            if not pause(AdminRandom:NextNumber(0.35,1.25),token) then return end
+            local data,err=fetchServers(token,true)
+            if not data then finish(token,err,C.red); return end
+            if not running(token) then return end
+            pool=Core.adminCandidates(data,prefs.ping,game.JobId,S.visited,os.time(),
+                CONFIG.VisitedTTL,os.clock(),CONFIG.AdminFreshSeconds)
+            if #pool==0 then
+                finish(token,"ADMINABUSE: sin candidatos 0-1 recientes con tu filtro de ping. No se usara cache vieja.",C.amber)
+                return
+            end
+        else
+            pool=candidates()
+            if #pool==0 and not fetched then
+                local data,err=fetchServers(token); fetched=true
+                if not data then finish(token,err,C.red); return end
+                pool=candidates()
+            end
+            if #pool==0 then finish(token,"Se agotaron las coincidencias. Cambia un filtro o busca despues.",C.amber); return end
+        end
+        local target=adminMode and Core.pickAdmin(pool,prefs.ping,AdminRandom:NextNumber()) or pool[1]
+        -- Ambos saltos comparten historial de visitas para no regresar a lo ya intentado.
+        S.visited[target.id]=os.time(); saveVisited()
+        if not adminMode then
+            for i=#S.cache,1,-1 do if S.cache[i].id==target.id then table.remove(S.cache,i) end end
+            saveCache()
+        end
+        saveSettings()
+        queueAutoResume()
+        local attempt={id=target.id,failed=false,committed=false,message=nil}
+        S.attempt=attempt; refresh()
+        local advertised=target.ping and (math.floor(target.ping).." ms") or "N/D"
+        if adminMode then
+            status(string.format("ADMIN %d/%d: %d jugador(es), %s. %d opcion(es); sin reserva de cupo.",
+                attemptNumber,maxAttempts,target.playing,advertised,#pool),C.cyan)
+        else
+            status(string.format("Intento %d/%d: %d jugador(es), ping anunciado %s.",attemptNumber,maxAttempts,target.playing,advertised),C.cyan)
+        end
+        local ok=pcall(function() Teleport:TeleportToPlaceInstance(game.PlaceId,target.id,Player) end)
+        if not ok then attempt.failed=true; attempt.message="Roblox rechazo iniciar el salto." end
+        local deadline=os.clock()+25
+        while running(token) and not attempt.failed and os.clock()<deadline do task.wait(0.1) end
+        if not running(token) then return end
+        if not attempt.failed then
+            prefs.autoHop=false; saveSettings()
+            finish(token,"Roblox no confirmo el resultado. Si sigues aqui, puedes volver a buscar.",C.amber)
+            return
+        end
+        S.attempt=nil
+        if attemptNumber<maxAttempts then
+            local waitFor=adminMode and AdminRandom:NextNumber(2,3) or 2
+            status((attempt.message or "No se pudo entrar.").." Probando otro...",C.amber)
+            if not pause(waitFor,token) then return end
+        end
+    end
+    finish(token,"No se pudo entrar tras "..maxAttempts.." intentos. Espera y vuelve a buscar.",C.red)
+end
+connect(Teleport.TeleportInitFailed,function(player,result,message,placeId,options)
+    local attempt=S.attempt
+    if player~=Player or not S.busy or not attempt or tonumber(placeId)~=tonumber(game.PlaceId) then return end
+    local id=nil
+    if options then pcall(function() id=options.ServerInstanceId end) end
+    if type(id)=="string" and id~="" and id~=attempt.id then return end
+    attempt.failed=true; attempt.message="Salto rechazado ("..tostring(result)..")."
+end)
+connect(Player.OnTeleport,function(state,placeId)
+    if S.attempt and (not placeId or tonumber(placeId)==tonumber(game.PlaceId)) then
+        if state==Enum.TeleportState.InProgress then S.attempt.committed=true end
+    end
+end)
+local function stopAuto(message)
+    local hadTeleport=S.attempt~=nil
+    prefs.autoHop=false; saveSettings()
+    S.run=S.run+1; S.busy=false; S.adminMode=false; S.attempt=nil
+    S.autoBadSince=nil; S.autoHasStatus=false
+    refresh()
+    status(hadTeleport and "Autosalto OFF. El salto ya enviado puede continuar." or (message or "Autosalto OFF. Busqueda detenida."),C.amber)
+end
+local function startHop(adminMode,automatic)
+    if not S.auth or S.busy then return end
+    if S.expiry and S.expiry<=os.time() then status("Licencia vencida.",C.red); return end
+    if os.clock()<S.searchUntil then
+        if not automatic then status("Espera "..math.ceil(S.searchUntil-os.clock()).." s antes de buscar otra vez.",C.amber) end
+        return
+    end
+    if not automatic then
+        prefs.autoMode=adminMode and "admin" or "normal"; saveSettings()
+    end
+    S.nextAutoAt=os.clock()+CONFIG.AutoRetrySeconds; S.autoHasStatus=false
+    S.searchUntil=os.clock()+CONFIG.SearchCooldown
+    S.run=S.run+1; S.busy=true; S.adminMode=adminMode; refresh()
+    local token=S.run
+    spawn(function()
+        local ok=pcall(runHop,token,adminMode)
+        if not ok then finish(token,"Error inesperado durante la busqueda. Puedes reintentar.",C.red) end
+    end)
+end
+connect(U.search.Activated,function()
+    if S.busy and not S.adminMode then stopAuto("Salto cancelado.") else startHop(false,false) end
+end)
+connect(U.admin.Activated,function()
+    if S.busy and S.adminMode then stopAuto("Adminabuse cancelado.") else startHop(true,false) end
+end)
+connect(U.auto.Activated,function()
+    if prefs.autoHop then stopAuto(); return end
+    prefs.autoHop=true
+    if S.busy then prefs.autoMode=S.adminMode and "admin" or "normal" end
+    saveSettings(); S.autoBadSince=nil; S.autoHasStatus=false
+    S.nextAutoAt=os.clock()+CONFIG.AutoBadSeconds
+    refresh()
+    local mode=prefs.autoMode=="admin" and "ADMINABUSE" or "NORMAL"
+    if canResume and S.storageOK then
+        status("Autosalto ON / "..mode..". Se queda si cumples los filtros; salta si no.",C.green)
+        if S.attempt then queueAutoResume() end
+    else
+        status("Autosalto ON / "..mode..". Tras cambiar de servidor, vuelve a ejecutar para continuar.",C.amber)
+    end
+end)
+connect(U.clear.Activated,function()
+    -- Debounce monotonic: no se reinicia el reloj por hacer clic repetido.
+    if os.clock()<S.clearUntil then return end
+    if S.busy then status("Cancela el salto antes de renovar la lista.",C.amber); return end
+    S.clearUntil=os.clock()+CONFIG.ClearCooldown
+    S.cache={}; S.cachedAt=0; saveCache(); refresh()
+    status("Lista vacia. Se actualizara al buscar otro servidor.",C.green)
+    spawn(function()
+        while S.alive and os.clock()<S.clearUntil do
+            U.clear.Text="ESPERA "..math.ceil(S.clearUntil-os.clock()).." s"
+            U.clear.AutoButtonColor=false; task.wait(0.1)
+        end
+        if S.alive then U.clear.Text="RENOVAR LISTA"; U.clear.AutoButtonColor=true end
+    end)
+end)
+
+-- Monitor ligero: solo ping actual y cantidad de jugadores.
+spawn(function()
+    local previousViewport=viewport()
+    while S.alive do
+        local v=viewport()
+        if v~=previousViewport then previousViewport=v; layout() end
+        local ok,value=pcall(function() return Stats.Network.ServerStatsItem["Data Ping"]:GetValue() end)
+        if ok and Core.number(value) and value>0 then
+            S.lastPing=value; S.lastPingAt=os.clock()
+            U.ping.Text=string.format("%d ms",math.floor(value))
+            U.ping.TextColor3=value<100 and C.green or (value<200 and C.amber or C.red)
+        else S.lastPing=nil; U.ping.Text="No disponible"; U.ping.TextColor3=C.muted end
+        U.population.Text=tostring(#Players:GetPlayers())
+        if S.auth then
+            if S.expiry then
+                U.license.Text="Licencia restante: "..Core.duration(S.expiry-os.time())
+                if os.time()>=S.expiry then
+                    prefs.autoHop=false; saveSettings()
+                    S.auth=false; S.run=S.run+1; S.busy=false; S.adminMode=false; S.attempt=nil
+                    U.loginStatus.Text="Tu licencia vencio. Ingresa una llave vigente."
+                    layout()
+                end
+            else U.license.Text="Licencia validada / vencimiento no informado" end
+        end
+        refresh(); task.wait(1)
+    end
+end)
+-- Autosalto orientado al objetivo: no abandonar un servidor que ya cumple.
+spawn(function()
+    while S.alive do
+        if S.auth and prefs.autoHop and not S.busy then
+            local ping=(os.clock()-S.lastPingAt<=3) and S.lastPing or nil
+            local matches=Core.autoSatisfied(prefs,#Players:GetPlayers(),tonumber(Players.MaxPlayers) or 0,ping)
+            if matches==false then
+                S.autoBadSince=S.autoBadSince or os.clock()
+                if os.clock()>=S.nextAutoAt and os.clock()-S.autoBadSince>=CONFIG.AutoBadSeconds then
+                    startHop(prefs.autoMode=="admin",true)
+                end
+            else
+                S.autoBadSince=nil
+                if os.clock()>=S.nextAutoAt and not S.autoHasStatus then
+                    status(matches==nil and "Autosalto ON. Esperando una lectura de ping..." or
+                        "Autosalto ON. Este servidor cumple; me quedo aqui.",C.green)
+                    S.autoHasStatus=true
+                end
+            end
+        end
+        task.wait(1)
+    end
+end)
+-- Conservar auto-login del codigo base sin ejecutar dos validaciones a la vez.
+spawn(function()
+    local savedKey=readText(FILES.key)
+    if savedKey and savedKey:match("%S") then login(savedKey) end
+end)
+connect(U.gui.Destroying,stop)
+
+]====]
+if type(writefile)=="function" then
+    pcall(writefile,"Dykrein_Hospot_Runtime_V5.lua",source)
+end
+local compile=loadstring
+if type(compile)~="function" then error("Tu entorno no permite cargar el script (loadstring).") end
+local run,err=compile(source)
+if not run then error(err) end
+run()
